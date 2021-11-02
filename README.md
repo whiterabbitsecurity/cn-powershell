@@ -204,13 +204,15 @@ DER in a string encoded with Base-64
 
 # Debugging With CertNanny
 
-When the PowerShell script is run by CertNanny, the stdout is expected to be data in JSON
-format that conforms to the data structure expected by the API command being run.
+When debugging a PowerShell script, keep in mind that the output of the script must be in a valid JSON structure to be parsed properly by CertNanny.
 
-Any output on stderr of the PowerShell execution will be logged as an error by CertNanny.
-In addition, CertNanny will log an error if the PowerShell script returns a non-zero value. The contents of the log entry will be the value of the "Error" attribute in the JSON data structure or, if this is not set, the exit code returned by the script.
+There are three ways to debug a PowerShell script using CertNanny:
 
-To debug a script using CertNanny, either return the "Error" attribute in the JSON output and set a non-zero return code, or write the error information to stderr in the PowerShell script.
+1. Return the needed debugging information in extra attributes in the JSON structure printed to stdout of the PowerShell script. The data structure can then be logged in CertNanny by setting the log level in CertNanny to `debug`.
+
+2. Return error details in the "Error" attribute of the JSON structure printed to stdout of the PowerShell script and exit from the script with a non-zero return code. CertNanny will stop with a fatal error message containing the string in the "Error" attribute.
+
+3. Write the error information to stderr in the PowerShell script and the output will will be logged as a non-fatal error.
 
 # Running Without CertNanny
 
