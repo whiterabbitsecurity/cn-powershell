@@ -202,6 +202,16 @@ ExtraExtensions are not currently supported.
 - CertificateRequest: contents of the certificate request (PKCS10) as
 DER in a string encoded with Base-64
 
+# Debugging With CertNanny
+
+When the PowerShell script is run by CertNanny, the stdout is expected to be data in JSON
+format that conforms to the data structure expected by the API command being run.
+
+Any output on stderr of the PowerShell execution will be logged as an error by CertNanny.
+In addition, CertNanny will log an error if the PowerShell script returns a non-zero value. The contents of the log entry will be the value of the "Error" attribute in the JSON data structure or, if this is not set, the exit code returned by the script.
+
+To debug a script using CertNanny, either return the "Error" attribute in the JSON output and set a non-zero return code, or write the error information to stderr in the PowerShell script.
+
 # Running Without CertNanny
 
 Since the data exchange consists of JSON structures via standard input and output, 
