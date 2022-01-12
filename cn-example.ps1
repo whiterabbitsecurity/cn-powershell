@@ -27,8 +27,49 @@ Param (
 # $params contains the input parameters from CertNanny that
 # is passed as JSON and converted here into a native object
 # variable.
-$params = $input | ConvertFrom-Json
+$params = [Console]::In.ReadToEnd() | ConvertFrom-Json
 
+############################################################
+# Internal helper functions
+############################################################
+
+# ParseBool() is used to normalize truth. Anything that is
+# not a commonly-accepted representation of a true value is
+# assumed to be false. 
+function ParseBool{
+    [CmdletBinding()]
+    param(
+    [Parameter(Position=0)]
+    [System.String]$inputVal
+    )
+    switch -regex ($inputVal.Trim())
+    {
+        "^(1|true|yes|on|enabled)$" { $true }
+        default { $false }
+    }
+}
+
+# Expand-ObjectName() is used to resolve the name of the file or object
+# within the keystore. The 'mutable' parameter allows to
+# toggle between the keystore itself and a temporary storage
+# location used during enrollment while the new certificate
+# is incomplete.
+function Expand-ObjectName {
+    param (
+        [Parameter(Mandatory)]
+        [string]$Name,
+        [ValidateNotNullOrEmpty()]
+        [string]$Location = $params.Location,
+        [bool]$Mutable = $(ParseBool($params.Mutable)),
+        [string]$Suffix = "-spool"
+    )
+
+    if ($Mutable) {
+        Write-Output $(Join-Path -Path $Location -ChildPath "$Name$Suffix")
+    } else {
+        Write-Output $(Join-Path -Path $Location -ChildPath $Name)
+    }
+}
 
 ############################################################
 # API Commands
@@ -58,30 +99,30 @@ $params = $input | ConvertFrom-Json
 #       ChainExists
 #       TrustAnchorExists
 #
-function Inspect {
+function Private:Do-Inspect {
     $result = @{}
 
-    if ($params.PrivateKeyName -And (Test-Path -Path $params.PrivateKeyName -PathType Leaf)) {
+    if ($params.PrivateKeyName -And (Test-Path -Path $(Expand-ObjectName -Name $params.PrivateKeyName) -PathType Leaf)) {
         $result += @{ "PrivateKeyExists"=$true }
     }
 
-    if ($params.CertificateName -And (Test-Path -Path $params.CertificateName -PathType Leaf)) {
+    if ($params.CertificateName -And (Test-Path -Path $(Expand-ObjectName -Name $params.CertificateName) -PathType Leaf)) {
         $result += @{"CertificateExists"=$true }
     }
 
-    if ($params.CertificateRequestTemplateName -And (Test-Path -Path $params.CertificateRequestTemplateName -PathType Leaf)) {
+    if ($params.CertificateRequestTemplateName -And (Test-Path -Path $(Expand-ObjectName -Name $params.CertificateRequestTemplateName) -PathType Leaf)) {
         $result += @{"CertificateRequestTemplateExists"=$true }
     }
 
-    if ($params.CertificateRequestName -And (Test-Path -Path $params.CertificateRequestName -PathType Leaf)) {
+    if ($params.CertificateRequestName -And (Test-Path -Path $(Expand-ObjectName -Name $params.CertificateRequestName) -PathType Leaf)) {
         $result += @{"CertificateRequestExists"=$true }
     }
 
-    if ($params.ChainName -And (Test-Path -Path $params.ChainName -PathType Leaf)) {
+    if ($params.ChainName -And (Test-Path -Path $(Expand-ObjectName -Name $params.ChainName) -PathType Leaf)) {
         $result += @{"ChainExists"=$true }
     }
 
-    if ($params.TrustAnchorsName -And (Test-Path -Path $params.TrustAnchorsName -PathType Leaf)) {
+    if ($params.TrustAnchorsName -And (Test-Path -Path $(Expand-ObjectName -Name $params.TrustAnchorsName) -PathType Leaf)) {
         $result += @{"TrustAnchorsExists"=$true }
     }
 
@@ -114,11 +155,11 @@ function Inspect {
 #       Certificate - Certificate in PEM
 #       Chain       - Certificate chain in PEM
 #
-function Attach {
+function Private:Do-Attach {
     $result = @{}
 
-    if ( $params.PrivateKeyName ) {
-        $cert = Get-Content -Path $params.PrivateKeyName -Raw
+    if ($params.PrivateKeyName -And (Test-Path -Path $(Expand-ObjectName -Name $params.PrivateKeyName) -PathType Leaf)) {
+        $cert = Get-Content -Path $(Expand-ObjectName -Name $params.PrivateKeyName) -Raw
         if ( $cert ) {
             $result += @{ "PrivateKey"="$cert" }
         } else {
@@ -128,8 +169,8 @@ function Attach {
         }
     }
 
-    if ( $params.CertificateName ) {
-        $cert = Get-Content -Path $params.CertificateName -Raw
+    if ($params.CertificateName -And (Test-Path -Path $(Expand-ObjectName -Name $params.CertificateName) -PathType Leaf)) {
+        $cert = Get-Content -Path $(Expand-ObjectName -Name $params.CertificateName) -Raw
         if ( $cert ) {
             $result += @{ "Certificate"="$cert" }
         } else {
@@ -139,8 +180,8 @@ function Attach {
         }
     }
 
-    if ( $params.ChainName ) {
-        $cert = Get-Content -Path $params.ChainName -Raw
+    if ($params.ChainName -And (Test-Path -Path $(Expand-ObjectName -Name $params.ChainName) -PathType Leaf)) {
+        $cert = Get-Content -Path $(Expand-ObjectName -Name $params.ChainName) -Raw
         if ( $cert ) {
             $result += @{ "Chain"="$cert" }
         } else {
@@ -150,8 +191,8 @@ function Attach {
         }
     }
 
-    if ( $params.CertificateRequestName ) {
-        $csr = Get-Content -Path $params.CertificateRequestName -Raw
+    if ($params.CertificateRequestName -And (Test-Path -Path $(Expand-ObjectName -Name $params.CertificateRequestName) -PathType Leaf)) {
+        $csr = Get-Content -Path $(Expand-ObjectName -Name $params.CertificateRequestName) -Raw
         if ( $csr ) {
             $result += @{ "CertificateRequest"="$csr" }
         } else {
@@ -199,7 +240,7 @@ function Attach {
 #
 #       PrivateKey  - Private key in PEM, if exportable
 #
-function GenerateKey {
+function Private:Do-GenerateKey {
     $result = @{}
 
     if ( -Not $params.PrivateKeyName ) {
@@ -207,7 +248,7 @@ function GenerateKey {
         ConvertTo-Json $err
         Exit 1
     }
-    $datadir = Split-Path "$($params.PrivateKeyName)"
+    $datadir = Split-Path "$(Expand-ObjectName -Name $params.PrivateKeyName)"
     if ( -Not (Test-Path -Path $datadir )) {
         try {
             New-Item -Path $datadir -ItemType directory
@@ -220,9 +261,10 @@ function GenerateKey {
     Switch ($params.KeyType) {
         'rsa' {
             if ($params.KeyParam) {
-                $errOutput = $( $output = & openssl genrsa -out $params.PrivateKeyName $params.KeyParam ) 2>&1
+                $errOutput = $( $output = & openssl genrsa -out $(Expand-ObjectName -Name $params.PrivateKeyName) $params.KeyParam ) 2>&1
+                #Write-Error "Output from genrsa: $errOutput"
                 if ($LastExitCode -eq 0) {
-                    $key = Get-Content -Path $params.PrivateKeyName -Raw
+                    $key = Get-Content -Path $(Expand-ObjectName -Name $params.PrivateKeyName) -Raw
                     if ( $key ) {
                         $result += @{ "PrivateKey"="$key" }
                         $result += @{ "StdOut"="$output" }
@@ -233,7 +275,7 @@ function GenerateKey {
                         Exit 1
                     }
                 } else {
-                    $err = @{ "Error"="openssl genrsa failed ($LastExitCode)" }
+                    $err = @{ "Error"="openssl genrsa failed ($LastExitCode): $errOutput" }
                     ConvertTo-Json $err
                     Exit 1
                 } 
@@ -282,26 +324,31 @@ function GenerateKey {
 #
 #   None.
 #
-function Persist {
+function Private:Do-Persist {
     $keys = @( "Certificate", "Chain", "CertificateRequest", "PrivateKey" )
 
     For ($i=0; $i -lt $keys.Length; $i++) {
         $label = $keys[$i]
         $namekey = $label + "Name"
 
-        $filename = $params.$namekey
-        $contents = $params.$label
+        $shortfilename = $params.$namekey
+        #Write-Error "Persist() label=$label, namekey=$namekey, shortfilename=$shortfilename, params=$params"
 
-        if ($contents -And $filename) {
-            if (-Not (Test-Path -Path $filename -PathType Leaf)) {
-               try {
-                    Out-File -FilePath $filename -InputObject $contents -NoNewLine
-                } catch {
-                    $err = @{ "Error"="Error writing ${label}: $PSItem" }
-                    ConvertTo-Json $err
-                    Exit 1
-                } 
-            }
+        if (-not [string]::IsNullOrEmpty($shortfilename)) {
+            $filename = $(Expand-ObjectName -Name $shortfilename)
+                $contents = $params.$label
+
+                if ($contents -And $filename) {
+                    if (-Not (Test-Path -Path $filename -PathType Leaf)) {
+                        try {
+                            Out-File -FilePath $filename -InputObject $contents -NoNewLine
+                        } catch {
+                            $err = @{ "Error"="Error writing ${label}: $PSItem" }
+                            ConvertTo-Json $err
+                                Exit 1
+                        } 
+                    }
+                }
         }
     }
 }
@@ -338,7 +385,7 @@ function Persist {
 #                             DER in a string encoded with Base-64
 #
 #
-function CreateCertificateRequest {
+function Private:Do-CreateCertificateRequest {
     $result = @{}
     #$required_params = @( "PrivateKeyName", "Subject", "CertificateRequestName" )
     $required_params = @( "PrivateKeyName", "Subject" )
@@ -364,7 +411,7 @@ function CreateCertificateRequest {
     $subject = "/" + $($subjArray -join "/")
 
     try {
-        $csr = & openssl req -new -key $($params.PrivateKeyName) -subj $subject $args
+        $csr = & openssl req -new -key $(Expand-ObjectName -Name $params.PrivateKeyName) -subj $subject $args
         $csr = [string]::join("",$($csr | Select-String -Pattern '-----(BEGIN|END) CERTIFICATE REQUEST---' -NotMatch))
     } catch {
         $err = @{ "Error"="Error creating csr: $PSItem" }
@@ -376,8 +423,8 @@ function CreateCertificateRequest {
         $result += @{ "CertificateRequest"="$csr" }
     } else {
         $err = @{ "Error"="Unable to read certificate request file" }
-        $err += @{ "PrivateKeyName"=$params.PrivateKeyName }
-        $err += @{ "CertificateRequestName"=$params.CertificateRequestName }
+        $err += @{ "PrivateKeyName"=$(Expand-ObjectName -Name $params.PrivateKeyName) }
+        $err += @{ "CertificateRequestName"=$(Expand-ObjectName -Name $params.CertificateRequestName) }
         $err += @{ "Subject"="$($params.Subject)" }
         $err += @{ "Params"=$params }
         ConvertTo-Json $err
@@ -387,6 +434,32 @@ function CreateCertificateRequest {
     ConvertTo-Json $result
 }
 
+function Private:Do-ImportCertificate {
+    $result = @{}
+    $required_params = @( "CertificateName", "ChainName", "PrivateKeyName" )
+
+    For ($i=0; $i -lt $required_params.Length; $i++) {
+        $key = $required_params[$i]
+        if ( -Not $params.$key ) {
+            $err = @{ "Error"="ImportCertificate requires $key" }
+            ConvertTo-Json $err
+                Exit 1
+        }
+    }
+
+    if ($params.PrivateKeyName -And (Test-Path -Path $(Expand-ObjectName -Name $params.PrivateKeyName -Mutable $true) -PathType Leaf)) {
+         Move-Item -Path $(Expand-ObjectName -Name $params.PrivateKeyName -Mutable $true) -Destination $(Expand-ObjectName -Name $params.PrivateKeyName -Mutable $false)
+    }
+
+    if ($params.CertificateName -And (Test-Path -Path $(Expand-ObjectName -Name $params.CertificateName -Mutable $true) -PathType Leaf)) {
+         Move-Item -Path $(Expand-ObjectName -Name $params.CertificateName -Mutable $true) -Destination $(Expand-ObjectName -Name $params.CertificateName -Mutable $false)
+    }
+
+    if ($params.ChainName -And (Test-Path -Path $(Expand-ObjectName -Name $params.ChainName -Mutable $true) -PathType Leaf)) {
+         Move-Item -Path $(Expand-ObjectName -Name $params.ChainName -Mutable $true) -Destination $(Expand-ObjectName -Name $params.ChainName -Mutable $false)
+    }
+}
+
 
 ############################################################
 # MAIN - Process API Command
@@ -394,7 +467,7 @@ function CreateCertificateRequest {
 
 Switch -Regex ($Command)
 {
-    '^Inspect|Attach|GenerateKey|Persist|CreateCertificateRequest$'  {& $Command; Break}
+    '^Inspect|Attach|GenerateKey|Persist|CreateCertificateRequest|ImportCertificate$'  {& "Do-$Command"; Break}
     Default {
         $err = @{ "Error"="Unsupported API command '$command'" }
         ConvertTo-Json $err

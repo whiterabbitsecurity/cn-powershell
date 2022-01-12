@@ -18,7 +18,9 @@ Param (
 # $params contains the input parameters from CertNanny that
 # is passed as JSON and converted here into a native object
 # variable.
-$params = $input | ConvertFrom-Json
+#$params = $input | ConvertFrom-Json
+# Apparently, reading $input does not work in PS 5...
+$params = [Console]::In.ReadToEnd()|ConvertFrom-Json
 
 ############################################################
 # Test/Example Commands
@@ -45,6 +47,15 @@ function test_err {
     ConvertTo-Json -Compress $params
     Exit 1
 }
+
+function get-subcall-1 {
+    Write-Output "this is the subcall-1"
+}
+
+function test_subcall {
+    Write-Output "outer; $(get-subcall-1)"
+}
+
 
 
 

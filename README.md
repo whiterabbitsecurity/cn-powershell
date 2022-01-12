@@ -14,6 +14,18 @@ up access to any native keystore that is not directly supported by CertNanny,
 but provides some form of executable or library that is available in
 PowerShell.
 
+## Notes
+
+Running scripts may need to be enabled on your system for CertNanny to be able to call the PowerShell script.
+For more information, see about\_Execution\_Policies at https://go.microsoft.com/fwlink/?linkID=135170.
+
+For example, to allow execution of PowerShell scripts on a test server, start PowerShell as administrator and enter the command:
+
+```
+Set-ExecutionPolicy -ExecutionPolicy Unrestricted
+```
+
+
 # API Basics
 
 When an API command is called by CertNanny, the PowerShell script specified
@@ -32,7 +44,12 @@ Any input data needed in the PowerShell script by the given API command is
 supplied by CertNanny on standard input of the PowerShell script in JSON
 format. For example, this can be read into the `$params` variable in the script:
 
+    # in PowerShell 7
     $params = $input | ConvertFrom-Json
+
+    # in PowerShell 5
+    $params = [Console]::In.ReadToEnd() | CovertFrom-Json
+
 
 On success, the script returns the resulting data as standard output in JSON
 format to CertNanny. On error, the script shall exit with a non-zero
@@ -72,6 +89,23 @@ the end of the script, the main program block could run the valid commands:
         }
     }
 
+## Common Input Attributes
+
+The following attributes are used as common input parameters for most of the API commands. Attributes that are relevant for single API Commands are documented below in the "API Commands" section.
+
+### Mutable
+
+The keystore is used as the storage location for an enrollment that is in progress. For renewal, this is typically a clone of an existing keystore with the currently-used certificate. The powershell implementation must honor the Mutable flag and, when set, adjust the location and file/object name attributes as needed to avoid corrupting the existing keystore contents.
+
+### Location
+
+The location may be a file path or identifier to distinguish the location of the keystore (e.g. "C:\openssl\server-a" or "\LocalMachine\My").
+
+### \*Name
+
+The file name or object identifier for the attribute within the given Location (e.g.: "server-cert.pem").
+
+
 # API Commands
 
 The API Commands currently supported are: Inspect, Attach, GenerateKey, Persist, and
@@ -89,6 +123,8 @@ Inspect the contents of the keystore and indicate whether objects exist.
 The names may refer to either files or objects, depending on how an individual keystore
 stores these objects internally.
 
+- Mutable
+- Location
 - PrivateKeyName
 - CertificateName
 - ChainName
@@ -124,6 +160,8 @@ the private key to be returned by the script.
 The names may refer to either files or objects, depending on how an individual keystore
 stores these objects internally.
 
+- Mutable
+- Location
 - PrivateKeyName
 - CertificateName
 - ChainName
@@ -149,6 +187,8 @@ Generate the private key using the given arguments.
 
 ### Input
 
+- Mutable
+- Location
 - PrivateKeyName
 - KeyPin: passphrase for protecting the key file/object
 - KeyType: either "rsa" or "ec"
@@ -167,6 +207,8 @@ Write the contents to the target keystore, if needed.
 
 ### Input
 
+- Mutable
+- Location
 - Certificate
 - CertificateName
 - Chain
@@ -184,6 +226,8 @@ Write the contents to the target keystore, if needed.
 
 ### Input
 
+- Mutable
+- Location
 - CertificateRequestName: [NOT IMPLEMENTED]
 - PrivateKeyName
 - KeyPin: passphrase for protecting key file/object
