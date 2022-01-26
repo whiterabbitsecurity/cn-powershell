@@ -87,6 +87,7 @@ function Expand-ObjectName {
 #       CertificateRequestTemplateName
 #       CertificateRequestName
 #       TrustAnchorName
+#       EnrollmentID
 #
 # TASK: Inspect the contents of the keystore and indicate whether objects exist
 #
@@ -141,6 +142,7 @@ function Private:Do-Inspect {
 #       CertificateRequestTemplateName
 #       CertificateRequestName
 #       TrustAnchorName
+#       EnrollmentID
 #
 #   A missing value shall be interpreted as false or an empty string.
 #
@@ -221,6 +223,7 @@ function Private:Do-Attach {
 #                               P256, P-256, prime256v1, scep256r1, 
 #                               P384, P384, scep384r1,
 #                               P521, P-521, scep521r1)
+#       EnrollmentID
 #
 # TASK:
 #
@@ -311,6 +314,7 @@ function Private:Do-GenerateKey {
 #       CertificateRequestName
 #       PrivateKey
 #       PrivateKeyName
+#       EnrollmentID
 #
 # TASK:
 #
@@ -369,6 +373,7 @@ function Private:Do-Persist {
 #                       value pairs where the key is the type
 #                       (e.g.: DNS, IP, URI, email) and the value
 #                       is the string value of that entry
+#       EnrollmentID
 #
 #   Note: Additional template attributes like IPAddresses, URIs and 
 #   ExtraExtensions are not currently supported.
@@ -434,6 +439,28 @@ function Private:Do-CreateCertificateRequest {
     ConvertTo-Json $result
 }
 
+# ImportCertificate()
+#
+# GIVEN:
+#
+#   $params contains the following attributes:
+#
+#       CertificateName
+#       ChainName
+#       PrivateKeyName
+#       EnrollmentID
+#
+# TASK:
+#
+#   Move newly-created certificate to target location in keystore
+#
+# RETURN:
+#
+#   The output JSON contains the following attributes:
+#
+#       <empty on success>
+#
+#
 function Private:Do-ImportCertificate {
     $result = @{}
     $required_params = @( "CertificateName", "ChainName", "PrivateKeyName" )
