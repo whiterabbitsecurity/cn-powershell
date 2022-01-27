@@ -105,6 +105,9 @@ The location may be a file path or identifier to distinguish the location of the
 
 The file name or object identifier for the attribute within the given Location (e.g.: "server-cert.pem").
 
+### EnrollmentID
+
+The Enrollment ID is a unique identifier set by certnanny at the start of an enrollment. The value is saved over multiple executions in the state file until it is removed upon successful enrollment. This can be used in the PowerShell script to distinguish between multiple enrollments of the given entity.
 
 # API Commands
 

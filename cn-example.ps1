@@ -103,6 +103,13 @@ function Expand-ObjectName {
 function Private:Do-Inspect {
     $result = @{}
 
+    if ($params.EnrollmentID) {
+        # for unit tests
+        $result += @{ "EnrollmentID"=$params.EnrollmentID }
+    } else {
+        $result += @{ "EnrollmentID"="<unset>" }
+    }
+
     if ($params.PrivateKeyName -And (Test-Path -Path $(Expand-ObjectName -Name $params.PrivateKeyName) -PathType Leaf)) {
         $result += @{ "PrivateKeyExists"=$true }
     }
