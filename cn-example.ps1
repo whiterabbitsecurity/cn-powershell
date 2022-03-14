@@ -112,26 +112,38 @@ function Private:Do-Inspect {
 
     if ($params.PrivateKeyName -And (Test-Path -Path $(Expand-ObjectName -Name $params.PrivateKeyName) -PathType Leaf)) {
         $result += @{ "PrivateKeyExists"=$true }
+    } else {
+        $result += @{ "PrivateKeyExists"=$false }
     }
 
     if ($params.CertificateName -And (Test-Path -Path $(Expand-ObjectName -Name $params.CertificateName) -PathType Leaf)) {
         $result += @{"CertificateExists"=$true }
+    } else {
+        $result += @{"CertificateExists"=$false }
     }
 
     if ($params.CertificateRequestTemplateName -And (Test-Path -Path $(Expand-ObjectName -Name $params.CertificateRequestTemplateName) -PathType Leaf)) {
         $result += @{"CertificateRequestTemplateExists"=$true }
+    } else {
+        $result += @{"CertificateRequestTemplateExists"=$false }
     }
 
     if ($params.CertificateRequestName -And (Test-Path -Path $(Expand-ObjectName -Name $params.CertificateRequestName) -PathType Leaf)) {
         $result += @{"CertificateRequestExists"=$true }
+    } else {
+        $result += @{"CertificateRequestExists"=$false }
     }
 
     if ($params.ChainName -And (Test-Path -Path $(Expand-ObjectName -Name $params.ChainName) -PathType Leaf)) {
         $result += @{"ChainExists"=$true }
+    } else {
+        $result += @{"ChainExists"=$false }
     }
 
     if ($params.TrustAnchorsName -And (Test-Path -Path $(Expand-ObjectName -Name $params.TrustAnchorsName) -PathType Leaf)) {
         $result += @{"TrustAnchorsExists"=$true }
+    } else {
+        $result += @{"TrustAnchorsExists"=$false }
     }
 
     ConvertTo-Json $result
@@ -143,9 +155,12 @@ function Private:Do-Inspect {
 #
 #   $params contains the following attributes:
 #
-#       PrivateKeyName
-#       CertificateName
-#       ChainName
+#       PrivateKeyExists
+#       PrivateKeyName (if PrivateKeyExists is true)
+#       CertificateExists
+#       CertificateName (if CertificateExists is true)
+#       ChainExists
+#       ChainName (if ChainExists is true)
 #       CertificateRequestTemplateName
 #       CertificateRequestName
 #       TrustAnchorName
@@ -167,7 +182,7 @@ function Private:Do-Inspect {
 function Private:Do-Attach {
     $result = @{}
 
-    if ($params.PrivateKeyName -And (Test-Path -Path $(Expand-ObjectName -Name $params.PrivateKeyName) -PathType Leaf)) {
+    if ($params.PrivateKeyExists -And $params.PrivateKeyName -And (Test-Path -Path $(Expand-ObjectName -Name $params.PrivateKeyName) -PathType Leaf)) {
         $cert = Get-Content -Path $(Expand-ObjectName -Name $params.PrivateKeyName) -Raw
         if ( $cert ) {
             $result += @{ "PrivateKey"="$cert" }
@@ -178,7 +193,7 @@ function Private:Do-Attach {
         }
     }
 
-    if ($params.CertificateName -And (Test-Path -Path $(Expand-ObjectName -Name $params.CertificateName) -PathType Leaf)) {
+    if ($params.CertificateExists -And $params.CertificateName -And (Test-Path -Path $(Expand-ObjectName -Name $params.CertificateName) -PathType Leaf)) {
         $cert = Get-Content -Path $(Expand-ObjectName -Name $params.CertificateName) -Raw
         if ( $cert ) {
             $result += @{ "Certificate"="$cert" }
@@ -189,7 +204,7 @@ function Private:Do-Attach {
         }
     }
 
-    if ($params.ChainName -And (Test-Path -Path $(Expand-ObjectName -Name $params.ChainName) -PathType Leaf)) {
+    if ($params.ChainExists -And $params.ChainName -And (Test-Path -Path $(Expand-ObjectName -Name $params.ChainName) -PathType Leaf)) {
         $cert = Get-Content -Path $(Expand-ObjectName -Name $params.ChainName) -Raw
         if ( $cert ) {
             $result += @{ "Chain"="$cert" }
@@ -200,7 +215,7 @@ function Private:Do-Attach {
         }
     }
 
-    if ($params.CertificateRequestName -And (Test-Path -Path $(Expand-ObjectName -Name $params.CertificateRequestName) -PathType Leaf)) {
+    if ($params.CertificateRequestExists -And $params.CertificateRequestName -And (Test-Path -Path $(Expand-ObjectName -Name $params.CertificateRequestName) -PathType Leaf)) {
         $csr = Get-Content -Path $(Expand-ObjectName -Name $params.CertificateRequestName) -Raw
         if ( $csr ) {
             $result += @{ "CertificateRequest"="$csr" }

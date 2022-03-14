@@ -165,12 +165,16 @@ stores these objects internally.
 
 - Mutable
 - Location
-- PrivateKeyName
-- CertificateName
-- ChainName
+- PrivateKeyExists
+- PrivateKeyName (if PrivateKeyExists is true)
+- CertificateExists
+- CertificateName (if CertificateExists is true)
+- ChainExists
+- ChainName (if ChainExists is true)
 - CertificateRequestTemplateName
 - CertificateRequestName
 - TrustAnchorName [reserved]
+
 
 ### Output
 
@@ -181,7 +185,7 @@ in the keystore.
 - PrivateKey
 - Certificate
 - CertificateRequestTemplate [reserved]
-- CertificateRequest
+- CertificateRequest [reserved]
 - Chain
 
 ## GenerateKey
