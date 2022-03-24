@@ -14,6 +14,7 @@ up access to any native keystore that is not directly supported by CertNanny,
 but provides some form of executable or library that is available in
 PowerShell.
 
+
 ## Notes
 
 Running scripts may need to be enabled on your system for CertNanny to be able to call the PowerShell script.
@@ -24,6 +25,7 @@ For example, to allow execution of PowerShell scripts on a test server, start Po
 ```
 Set-ExecutionPolicy -ExecutionPolicy Unrestricted
 ```
+
 
 
 # API Basics
@@ -89,6 +91,7 @@ the end of the script, the main program block could run the valid commands:
         }
     }
 
+
 ## Common Input Attributes
 
 The following attributes are used as common input parameters for most of the API commands. Attributes that are relevant for single API Commands are documented below in the "API Commands" section.
@@ -109,6 +112,8 @@ The file name or object identifier for the attribute within the given Location (
 
 The Enrollment ID is a unique identifier set by certnanny at the start of an enrollment. The value is saved over multiple executions in the state file until it is removed upon successful enrollment. This can be used in the PowerShell script to distinguish between multiple enrollments of the given entity.
 
+
+
 # API Commands
 
 The API Commands currently supported are: Inspect, Attach, GenerateKey, Persist, and
@@ -116,6 +121,7 @@ CreateCertificateRequest.
 
 Unless otherwise specified, the input and output of each command is a name-value list of 
 attributes.
+
 
 ## Inspect
 
@@ -146,6 +152,7 @@ in the keystore.
 - CertificateRequestExists
 - ChainExists
 - TrustAnchorExists [reserved]
+
 
 ## Attach
 
@@ -188,6 +195,7 @@ in the keystore.
 - CertificateRequest [reserved]
 - Chain
 
+
 ## GenerateKey
 
 Generate the private key using the given arguments.
@@ -207,6 +215,7 @@ P384, P384, scep384r1, P521, P-521, scep521r1)
 ### Output
 
 - PrivateKey: private key in PEM, if exportable from the underlying keystore
+
 
 ## Persist
 
@@ -228,6 +237,7 @@ Write the contents to the target keystore, if needed.
 ### Output
 
 - _None_
+
 
 ## CreateCertificateRequest
 
@@ -253,6 +263,21 @@ ExtraExtensions are not currently supported.
 - CertificateRequest: contents of the certificate request (PKCS10) as
 DER in a string encoded with Base-64
 
+
+## GetTruststore
+
+Gets the trusted certificates from a keystore for internal use in certnanny itself (i.e.: for the enrollment via HTTPS).
+
+### Input
+
+- _none_
+
+### Output
+
+- TrustedCertificates: String containing all trusted certificates in PEM format
+
+
+
 # Debugging With CertNanny
 
 When debugging a PowerShell script, keep in mind that the output of the script must be in a valid JSON structure to be parsed properly by CertNanny.
@@ -264,6 +289,8 @@ There are three ways to debug a PowerShell script using CertNanny:
 2. Return error details in the "Error" attribute of the JSON structure printed to stdout of the PowerShell script and exit from the script with a non-zero return code. CertNanny will stop with a fatal error message containing the string in the "Error" attribute.
 
 3. Write the error information to stderr in the PowerShell script and the output will will be logged as a non-fatal error.
+
+
 
 # Running Without CertNanny
 
