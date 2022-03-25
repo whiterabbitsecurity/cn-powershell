@@ -532,6 +532,7 @@ function Private:Do-ImportCertificate {
 function Private:Do-GetTruststore {
     $result = @{}
 
+    # These are the trust roots for the OpenXPKI Demo 
     $result += @{ "TrustedCertificates"="      -----BEGIN CERTIFICATE-----
 MIIFKzCCAxOgAwIBAgIJAL22je1NVEGzMA0GCSqGSIb3DQEBCwUAMCQxIjAgBgNV
 BAMMGU9wZW5YUEtJIENBLU9uZSBSb290IENBIDEwHhcNMTgwMzMxMDcyNjQxWhcN
