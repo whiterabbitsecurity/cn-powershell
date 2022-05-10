@@ -263,6 +263,24 @@ ExtraExtensions are not currently supported.
 - CertificateRequest: contents of the certificate request (PKCS10) as
 DER in a string encoded with Base-64
 
+## CreateCMS
+
+Creates a CMS (PKCS#7) message of the given CSR signed with the keystore's private key.
+
+### Input
+
+- Mutable
+- Location
+- PrivateKeyName
+- KeyPin: passphrase for protecting key file/object
+- CertificateRequest
+
+Note: As a reference implementation, the CMS can be created using the following OpenSSL commands:
+
+```
+openssl req -in test.csr -outform der | \
+openssl cms -outform pem -sign -binary -nodetach -signer test.crt -inkey oldkey.key -out blob.p7
+```
 
 ## GetTruststore
 

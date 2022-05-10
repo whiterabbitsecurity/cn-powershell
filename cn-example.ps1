@@ -14,6 +14,12 @@
 # standpoint, but to merely demonstrate the API between CertNanny
 # and the PowerShell subsystem.
 
+# For the CMS demo, a recent version of OpenSSL is needed.
+#if (Test-Path -Path "/usr/local/opt/openssl/bin/openssl" -PathType Leaf) {
+#Set-Variable -Name "openssl" -Value "/usr/local/opt/openssl/bin/openssl"
+#} else {
+#    $openssl = "openssl"
+#}
 
 ############################################################
 # Fetch command line arguments and data passed on input
@@ -28,6 +34,7 @@ Param (
 # is passed as JSON and converted here into a native object
 # variable.
 $params = [Console]::In.ReadToEnd() | ConvertFrom-Json
+
 
 ############################################################
 # Internal helper functions
@@ -171,6 +178,8 @@ function Private:Do-Inspect {
 # TASK: For items that are flagged as Exists, read the contents of the
 # corresponding file or object.
 #
+# NOTE: For testing CMS with OpenSSL, set the environment variable CNPS_FORCE_CMS=1.
+#
 # RETURN:
 #
 #   The output JSON contains the following attributes:
@@ -185,7 +194,11 @@ function Private:Do-Attach {
     if ($params.PrivateKeyExists -And $params.PrivateKeyName -And (Test-Path -Path $(Expand-ObjectName -Name $params.PrivateKeyName) -PathType Leaf)) {
         $cert = Get-Content -Path $(Expand-ObjectName -Name $params.PrivateKeyName) -Raw
         if ( $cert ) {
-            $result += @{ "PrivateKey"="$cert" }
+            if ( $env:CNPS_FORCE_CMS -eq "1" ) {
+                $result += @{ "debug_PrivateKey"="Not set - CNPS_FORCE_CMS=1" }
+            } else {
+                $result += @{ "PrivateKey"="$cert" }
+            }
         } else {
             $err = @{ "Error"="Unable to read private key file" }
             ConvertTo-Json $err
@@ -286,7 +299,7 @@ function Private:Do-GenerateKey {
     Switch ($params.KeyType) {
         'rsa' {
             if ($params.KeyParam) {
-                $errOutput = $( $output = & openssl genrsa -out $(Expand-ObjectName -Name $params.PrivateKeyName) $params.KeyParam ) 2>&1
+                $errOutput = $( $output = & /usr/local/opt/openssl/bin/openssl genrsa -out $(Expand-ObjectName -Name $params.PrivateKeyName) $params.KeyParam ) 2>&1
                 #Write-Error "Output from genrsa: $errOutput"
                 if ($LastExitCode -eq 0) {
                     $key = Get-Content -Path $(Expand-ObjectName -Name $params.PrivateKeyName) -Raw
@@ -438,7 +451,7 @@ function Private:Do-CreateCertificateRequest {
     $subject = "/" + $($subjArray -join "/")
 
     try {
-        $csr = & openssl req -new -key $(Expand-ObjectName -Name $params.PrivateKeyName) -subj $subject $args
+        $csr = & /usr/local/opt/openssl/bin/openssl req -new -key $(Expand-ObjectName -Name $params.PrivateKeyName) -subj $subject $args
         $csr = [string]::join("",$($csr | Select-String -Pattern '-----(BEGIN|END) CERTIFICATE REQUEST---' -NotMatch))
     } catch {
         $err = @{ "Error"="Error creating csr: $PSItem" }
@@ -507,6 +520,85 @@ function Private:Do-ImportCertificate {
     if ($params.ChainName -And (Test-Path -Path $(Expand-ObjectName -Name $params.ChainName -Mutable $true) -PathType Leaf)) {
          Move-Item -Path $(Expand-ObjectName -Name $params.ChainName -Mutable $true) -Destination $(Expand-ObjectName -Name $params.ChainName -Mutable $false)
     }
+}
+
+# CreateCMS()
+#
+# GIVEN:
+#
+#   $params contains the following attributes:
+#
+#       CertificateRequest  PKCS#10 CSR in PEM format
+#       CertificateName     Name of certificate file/object to use for signing
+#       PrivateKeyName      Name of private key file/object to use for signing
+#       KeyPin          passphrase for protecting key file/object
+#       EnrollmentID
+#
+# TASK:
+#
+#   Write contents to target keystore, if needed
+#
+# RETURN:
+#
+#   The output JSON contains the following attributes:
+#
+#       CMS  - Contents of the CMS in PKCS#7 format
+#
+#
+function Private:Do-CreateCMS {
+    $result = @{}
+    $required_params = @( "PrivateKeyName", "CertificateRequest", "CertificateName" )
+
+    For ($i=0; $i -lt $required_params.Length; $i++) {
+        $key = $required_params[$i]
+        if ( -Not $params.$key ) {
+            $err = @{ "Error"="CreateCMS requires $key" }
+            ConvertTo-Json $err
+                Exit 1
+        }
+    }
+
+    $args = @()
+
+    if ( $params.KeyPin ) {
+        $pin = $params.KeyPin
+        $args += '-passin', "pass:$pin"
+    }
+
+    $pk = $(Expand-ObjectName -Name $params.PrivateKeyName)
+    $crt = $(Expand-ObjectName -Name $params.CertificateName)
+    $csr = $params.CertificateRequest
+
+    # I'm a PS n00b, and instead of figuring out how to do the conversion below in a pipeline,
+    # I use these temporary files and separate calls to openssl.
+    $csrfile = "$($params.Location)/ps-csr.pem"
+    $csrbinfile = "$($params.Location)/ps-csr.bin"
+    $cmsfile = "$($params.Location)/ps-cms.pem"
+
+    $csr > $csrfile
+
+    try {
+        & /usr/local/opt/openssl/bin/openssl enc -d -base64 -in $csrfile -out $csrbinfile
+        & /usr/local/opt/openssl/bin/openssl cms -outform pem -sign -binary -nodetach -signer $crt -inkey $pk -in $csrbinfile -out $cmsfile
+        $cms = Get-Content -Raw $cmsfile
+    } catch {
+        $err = @{ "Error"="Error creating cms: $PSItem" }
+        ConvertTo-Json $err
+        Exit 1
+    }
+
+    if ( $cms ) {
+        $result += @{ "CMS"="$cms" }
+    } else {
+        $err = @{ "Error"="Unable to read CMS" }
+        $err += @{ "PrivateKeyName"=$pk }
+        $err += @{ "CertificateName"=$crt }
+        $err += @{ "Params"=$params }
+        ConvertTo-Json $err
+        Exit 1
+    }
+
+    ConvertTo-Json $result
 }
 
 
@@ -725,7 +817,7 @@ UAM1u34E36neL/Zba7ombkIOchSgx1iVxzqtFWGddgoG+tppRPWhuhhn
 
 Switch -Regex ($Command)
 {
-    '^Inspect|Attach|GenerateKey|Persist|CreateCertificateRequest|ImportCertificate|GetTruststore$'  {& "Do-$Command"; Break}
+    '^Inspect|Attach|GenerateKey|Persist|CreateCertificateRequest|ImportCertificate|GetTruststore|CreateCMS$'  {& "Do-$Command"; Break}
     Default {
         $err = @{ "Error"="Unsupported API command '$command'" }
         ConvertTo-Json $err
