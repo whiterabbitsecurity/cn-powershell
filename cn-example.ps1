@@ -35,6 +35,15 @@ Param (
 # variable.
 $params = [Console]::In.ReadToEnd() | ConvertFrom-Json
 
+# Add possible location(s) of openssl to path
+# Path is used on Windows
+$env:Path = $env:Path + ';C:\Program Files\Git\usr\bin'
+
+if (Test-Path '/usr/local/opt/openssl/bin/openssl' -PathType Leaf) {
+    $openssl = '/usr/local/opt/openssl/bin/openssl'
+} else {
+    $openssl = (get-command openssl).Path
+}
 
 ############################################################
 # Internal helper functions
@@ -184,9 +193,10 @@ function Private:Do-Inspect {
 #
 #   The output JSON contains the following attributes:
 #
-#       PrivateKey  - Private key in PEM, if exportable
-#       Certificate - Certificate in PEM
-#       Chain       - Certificate chain in PEM
+#       PrivateKey          - Private key in PEM, if exportable
+#       Certificate         - Certificate in PEM
+#       Chain               - Certificate chain in PEM
+#       CertificateRequest  - Certificate Request in PEM
 #
 function Private:Do-Attach {
     $result = @{}
@@ -287,7 +297,7 @@ function Private:Do-GenerateKey {
         Exit 1
     }
     $datadir = Split-Path "$(Expand-ObjectName -Name $params.PrivateKeyName)"
-    if ( -Not (Test-Path -Path $datadir )) {
+    if ( $datadir -And -Not (Test-Path -Path $datadir )) {
         try {
             New-Item -Path $datadir -ItemType directory
         } catch {
@@ -299,7 +309,7 @@ function Private:Do-GenerateKey {
     Switch ($params.KeyType) {
         'rsa' {
             if ($params.KeyParam) {
-                $errOutput = $( $output = & /usr/local/opt/openssl/bin/openssl genrsa -out $(Expand-ObjectName -Name $params.PrivateKeyName) $params.KeyParam ) 2>&1
+                $errOutput = $( $output = & $openssl genrsa -out $(Expand-ObjectName -Name $params.PrivateKeyName) $params.KeyParam ) 2>&1
                 #Write-Error "Output from genrsa: $errOutput"
                 if ($LastExitCode -eq 0) {
                     $key = Get-Content -Path $(Expand-ObjectName -Name $params.PrivateKeyName) -Raw
@@ -451,7 +461,7 @@ function Private:Do-CreateCertificateRequest {
     $subject = "/" + $($subjArray -join "/")
 
     try {
-        $csr = & /usr/local/opt/openssl/bin/openssl req -new -key $(Expand-ObjectName -Name $params.PrivateKeyName) -subj $subject $args
+        $csr = & $openssl req -new -key $(Expand-ObjectName -Name $params.PrivateKeyName) -subj $subject $args
         $csr = [string]::join("",$($csr | Select-String -Pattern '-----(BEGIN|END) CERTIFICATE REQUEST---' -NotMatch))
     } catch {
         $err = @{ "Error"="Error creating csr: $PSItem" }
@@ -522,13 +532,13 @@ function Private:Do-ImportCertificate {
     }
 }
 
-# CreateCMS()
+# CreatePKCS7()
 #
 # GIVEN:
 #
 #   $params contains the following attributes:
 #
-#       CertificateRequest  PKCS#10 CSR in PEM format
+#       InputData           Data to sign, encoded in Base-64 format
 #       CertificateName     Name of certificate file/object to use for signing
 #       PrivateKeyName      Name of private key file/object to use for signing
 #       KeyPin          passphrase for protecting key file/object
@@ -536,23 +546,24 @@ function Private:Do-ImportCertificate {
 #
 # TASK:
 #
-#   Write contents to target keystore, if needed
+#   Decrypt Base-64 encoded input to raw data and sign the input data,
+#   creating an PKCS7 object to return.
 #
 # RETURN:
 #
 #   The output JSON contains the following attributes:
 #
-#       CMS  - Contents of the CMS in PKCS#7 format
+#       PKCS7  - Contents of the input data in PKCS#7 format
 #
 #
-function Private:Do-CreateCMS {
+function Private:Do-CreatePKCS7 {
     $result = @{}
-    $required_params = @( "PrivateKeyName", "CertificateRequest", "CertificateName" )
+    $required_params = @( "PrivateKeyName", "InputData", "CertificateName" )
 
     For ($i=0; $i -lt $required_params.Length; $i++) {
         $key = $required_params[$i]
         if ( -Not $params.$key ) {
-            $err = @{ "Error"="CreateCMS requires $key" }
+            $err = @{ "Error"="CreatePKCS7 requires $key" }
             ConvertTo-Json $err
                 Exit 1
         }
@@ -567,30 +578,29 @@ function Private:Do-CreateCMS {
 
     $pk = $(Expand-ObjectName -Name $params.PrivateKeyName)
     $crt = $(Expand-ObjectName -Name $params.CertificateName)
-    $csr = $params.CertificateRequest
+    $data = $params.InputData
 
     # I'm a PS n00b, and instead of figuring out how to do the conversion below in a pipeline,
     # I use these temporary files and separate calls to openssl.
-    $csrfile = "$($params.Location)/ps-csr.pem"
-    $csrbinfile = "$($params.Location)/ps-csr.bin"
-    $cmsfile = "$($params.Location)/ps-cms.pem"
-
-    $csr > $csrfile
+    # NOTE: For debugging and demonstration purposes, these files are not automatically deleted.
+    $databinfile = "$($params.Location)/ps-data.bin"
+    $pkcs7file = "$($params.Location)/ps-pkcs7.pem"
 
     try {
-        & /usr/local/opt/openssl/bin/openssl enc -d -base64 -in $csrfile -out $csrbinfile
-        & /usr/local/opt/openssl/bin/openssl cms -outform pem -sign -binary -nodetach -signer $crt -inkey $pk -in $csrbinfile -out $cmsfile
-        $cms = Get-Content -Raw $cmsfile
+        $databin = [Text.Encoding]::Utf8.GetString([Convert]::FromBase64String($data))
+        $databin > $databinfile
+        & $openssl smime -outform pem -sign -binary -nodetach -signer $crt -inkey $pk -in $databinfile -out $pkcs7file
+        $pkcs7 = Get-Content -Raw $pkcs7file
     } catch {
-        $err = @{ "Error"="Error creating cms: $PSItem" }
+        $err = @{ "Error"="Error creating PKCS7: $PSItem" }
         ConvertTo-Json $err
         Exit 1
     }
 
-    if ( $cms ) {
-        $result += @{ "CMS"="$cms" }
+    if ( $pkcs7 ) {
+        $result += @{ "PKCS7"="$pkcs7" }
     } else {
-        $err = @{ "Error"="Unable to read CMS" }
+        $err = @{ "Error"="Unable to read PKCS7" }
         $err += @{ "PrivateKeyName"=$pk }
         $err += @{ "CertificateName"=$crt }
         $err += @{ "Params"=$params }
@@ -817,7 +827,7 @@ UAM1u34E36neL/Zba7ombkIOchSgx1iVxzqtFWGddgoG+tppRPWhuhhn
 
 Switch -Regex ($Command)
 {
-    '^Inspect|Attach|GenerateKey|Persist|CreateCertificateRequest|ImportCertificate|GetTruststore|CreateCMS$'  {& "Do-$Command"; Break}
+    '^Inspect|Attach|GenerateKey|Persist|CreateCertificateRequest|ImportCertificate|GetTruststore|CreateCMS|CreatePKCS7$'  {& "Do-$Command"; Break}
     Default {
         $err = @{ "Error"="Unsupported API command '$command'" }
         ConvertTo-Json $err
