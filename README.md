@@ -1,10 +1,28 @@
-# CertNanny PowerShell Keystore
+# CertNanny PowerShell
 
 CertNanny is a tool for decentralized certificate management on servers,
 workstations and IoT devices. This single program file takes care of the
 automatic initial enrollment, renewal and replacement of the certificate
 directly on the device, automating the entire management lifecycle of your
 certificates.
+
+PowerShell may be used with CertNanny in two ways:
+
+1) The CertNanny executable is called in your PowerShell scripts to
+   automate the enrollment and renewal processes.
+
+2) PowerShell is used to implement a Keystore that can be used
+   natively by CertNanny.
+
+# Calling CertNanny Within PowerShell
+
+Using CertNanny in PowerShell scripts allows you to automate more complex
+workflows that are not natively supported in CertNanny itself. The best
+example is bulk enrollment, for which there is a simple example in `pwsh-batch`.
+
+For more details, see `pwsh-batch\README.md`.
+
+# CertNanny PowerShell Keystore
 
 In CertNanny, keystore backends are used to perform the underlying operations
 on the local keystores available. The PowerShell keystore backend allows
