@@ -48,7 +48,7 @@ else {
     Write-Host "INFO: skipping on-behalf auth cert -- already exists"
 }
 
-if (-not (Test-Path "onbehalf")) {
+if (-not (Test-Path "onbehalf\onbehalf-cert.pem")) {
     Write-Host "INFO: creating on-behalf auth cert..."
     $hostname = Get-RandomHexString
     certnanny run enroll -- --keystore onbehalf --variable "FQDN=${hostname}-batch-on-behalf.openxpki.test:pkiclient" --variable "hostname=${hostname}-batch-on-behalf" --secret verysecret
